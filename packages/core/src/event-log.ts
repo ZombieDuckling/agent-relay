@@ -13,9 +13,20 @@ export class EventLog {
 
   readAll(): RelayEvent[] {
     if (!existsSync(this.path)) return [];
-    return readFileSync(this.path, "utf8")
-      .split("\n").filter(Boolean)
-      .map(line => RelayEventSchema.parse(JSON.parse(line)));
+    const lines = readFileSync(this.path, "utf8").split("\n").filter(Boolean);
+    const events: RelayEvent[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const lineNo = i + 1;
+      try {
+        const parsed = JSON.parse(lines[i]);
+        const event = RelayEventSchema.parse(parsed);
+        events.push(event);
+      } catch (err) {
+        const cause = err instanceof Error ? err.message : String(err);
+        throw new Error(`EventLog: invalid event at ${this.path}:${lineNo}: ${cause}`);
+      }
+    }
+    return events;
   }
 
   readSession(sid: string): RelayEvent[] {
