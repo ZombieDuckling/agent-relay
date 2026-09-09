@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-relay.dev/schemas/node.schema.json",
+  "title": "GraphNode",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "Session",
+        "Run",
+        "Message",
+        "ToolCall",
+        "Artifact",
+        "ContextInjection",
+        "Driver",
+        "Workspace",
+        "Receipt"
+      ]
+    },
+    "props": {
+      "type": "object"
+    }
+  },
+  "required": ["id", "type", "props"],
+  "additionalProperties": false
+}

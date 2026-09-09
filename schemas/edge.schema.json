@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-relay.dev/schemas/edge.schema.json",
+  "title": "GraphEdge",
+  "type": "object",
+  "properties": {
+    "from": { "type": "string" },
+    "to": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "HAS_RUN",
+        "PRODUCED",
+        "CALLED",
+        "WROTE",
+        "INJECTED_INTO",
+        "RESUMED_FROM",
+        "EXECUTED_BY",
+        "RECEIPTED_BY"
+      ]
+    },
+    "ts": { "type": "string", "format": "date-time" },
+    "source_event_id": { "type": "string", "pattern": "^evt_" }
+  },
+  "required": ["from", "to", "type", "ts", "source_event_id"],
+  "additionalProperties": false
+}
