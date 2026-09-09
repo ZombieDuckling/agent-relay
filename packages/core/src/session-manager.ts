@@ -46,19 +46,30 @@ export class SessionManager {
     yield this.record({ session_id: sid, run, kind: "run.started",
       data: { prompt, ...(run > 0 ? { resumed_from: String(run - 1) } : {}) } });
     let msg = 0, tool = 0;
-    for await (const ev of driver.run({ workspace: s.workspace, prompt, resume: s.harnessSessionId, signal: s.abort.signal })) {
-      switch (ev.type) {
-        case "init": s.harnessSessionId = ev.harness_session_id; break;
-        case "message": yield this.record({ session_id: sid, run, kind: "message", data: { index: msg++, role: ev.role, text: ev.text } }); break;
-        case "tool": yield this.record({ session_id: sid, run, kind: "tool.called", data: { index: tool++, name: ev.name, input: ev.input } }); break;
-        case "tool_denied": yield this.record({ session_id: sid, run, kind: "tool.denied", data: { index: tool++, name: ev.name, input: ev.input, reason: ev.reason } }); break;
-        case "artifact": yield this.record({ session_id: sid, run, kind: "artifact.written", data: { path: ev.path } }); break;
-        case "result": {
-          const { type: _t, ...rest } = ev;
-          yield this.record({ session_id: sid, run, kind: "run.finished", data: rest });
-          break;
+    let finished = false;
+    try {
+      for await (const ev of driver.run({ workspace: s.workspace, prompt, resume: s.harnessSessionId, signal: s.abort.signal })) {
+        switch (ev.type) {
+          case "init": s.harnessSessionId = ev.harness_session_id; break;
+          case "message": yield this.record({ session_id: sid, run, kind: "message", data: { index: msg++, role: ev.role, text: ev.text } }); break;
+          case "tool": yield this.record({ session_id: sid, run, kind: "tool.called", data: { index: tool++, name: ev.name, input: ev.input } }); break;
+          case "tool_denied": yield this.record({ session_id: sid, run, kind: "tool.denied", data: { index: tool++, name: ev.name, input: ev.input, reason: ev.reason } }); break;
+          case "artifact": yield this.record({ session_id: sid, run, kind: "artifact.written", data: { path: ev.path } }); break;
+          case "result": {
+            const { type: _t, ...rest } = ev;
+            finished = true;
+            yield this.record({ session_id: sid, run, kind: "run.finished", data: rest });
+            break;
+          }
         }
       }
+    } catch (err) {
+      if (!finished) {
+        const aborted = s.abort.signal.aborted;
+        yield this.record({ session_id: sid, run, kind: "run.finished",
+          data: { subtype: aborted ? "cancelled" : "error", error: String((err as any)?.message ?? err) } });
+      }
+      throw err;
     }
   }
 
