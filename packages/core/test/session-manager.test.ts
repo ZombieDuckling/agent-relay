@@ -95,3 +95,42 @@ test("cancel during a run records a terminal run.finished with subtype cancelled
   expect(finished).toBeDefined();
   expect((finished!.data as any).subtype).toBe("cancelled");
 });
+
+test("driver lookup rejects __proto__ and constructor", () => {
+  const m = mk();
+  expect(() => m.createSession("__proto__")).toThrow(/unknown driver/);
+  expect(() => m.createSession("constructor")).toThrow(/unknown driver/);
+});
+
+test("session ids are full UUIDs", () => {
+  const m = mk();
+  const s1 = m.createSession("fake");
+  const s2 = m.createSession("fake");
+  // Full UUID is 36 chars: 8-4-4-4-12 with hyphens
+  expect(s1.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  expect(s2.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  expect(s1.id).not.toBe(s2.id);
+});
+
+test("cancel on idle session records exactly one cancelled event and does not throw", async () => {
+  const m = mk();
+  const s = m.createSession("fake");
+  // Call cancel without running anything
+  expect(() => m.cancel(s.id)).not.toThrow();
+  const events = m.events(s.id);
+  const cancelledEvents = events.filter(e => e.kind === "session.cancelled");
+  expect(cancelledEvents).toHaveLength(1);
+});
+
+test("cancel on idle session does not interfere with subsequent run", async () => {
+  const m = mk();
+  const s = m.createSession("fake");
+  m.cancel(s.id);
+  // Verify that run still works after cancel on idle
+  const kinds: string[] = [];
+  await expect((async () => {
+    for await (const e of m.run(s.id, "write test.txt")) kinds.push(e.kind);
+  })()).resolves.not.toThrow();
+  expect(kinds).toContain("run.started");
+  expect(kinds).toContain("run.finished");
+});

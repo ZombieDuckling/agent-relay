@@ -8,7 +8,7 @@ import type { Driver } from "./driver.js";
 import type { RelayEvent } from "./events.js";
 
 export type SessionManagerOptions = { dataDir: string; templateDir: string; drivers: Record<string, Driver> };
-type SessionState = { driver: string; workspace: string; runs: number; harnessSessionId?: string; abort?: AbortController };
+type SessionState = { driver: string; workspace: string; runs: number; harnessSessionId?: string; abort?: AbortController; active: boolean };
 
 export class SessionManager {
   readonly graph: SessionGraph;
@@ -29,10 +29,10 @@ export class SessionManager {
   }
 
   createSession(driverName: string) {
-    if (!this.o.drivers[driverName]) throw new Error(`unknown driver: ${driverName}`);
-    const id = randomUUID().slice(0, 8);
+    if (!Object.hasOwn(this.o.drivers, driverName)) throw new Error(`unknown driver: ${driverName}`);
+    const id = randomUUID();
     const workspace = createWorkspace(join(this.o.dataDir, "workspaces"), id, this.o.templateDir);
-    this.sessions.set(id, { driver: driverName, workspace, runs: 0 });
+    this.sessions.set(id, { driver: driverName, workspace, runs: 0, active: false });
     this.record({ session_id: id, kind: "session.created", data: { driver: driverName, workspace } });
     return { id, workspace };
   }
@@ -43,40 +43,45 @@ export class SessionManager {
     const driver = this.o.drivers[s.driver]!;
     const run = s.runs++;
     s.abort = new AbortController();
-    yield this.record({ session_id: sid, run, kind: "run.started",
-      data: { prompt, ...(run > 0 ? { resumed_from: String(run - 1) } : {}) } });
-    let msg = 0, tool = 0;
-    let finished = false;
+    s.active = true;
     try {
-      for await (const ev of driver.run({ workspace: s.workspace, prompt, resume: s.harnessSessionId, signal: s.abort.signal })) {
-        switch (ev.type) {
-          case "init": s.harnessSessionId = ev.harness_session_id; break;
-          case "message": yield this.record({ session_id: sid, run, kind: "message", data: { index: msg++, role: ev.role, text: ev.text } }); break;
-          case "tool": yield this.record({ session_id: sid, run, kind: "tool.called", data: { index: tool++, name: ev.name, input: ev.input } }); break;
-          case "tool_denied": yield this.record({ session_id: sid, run, kind: "tool.denied", data: { index: tool++, name: ev.name, input: ev.input, reason: ev.reason } }); break;
-          case "artifact": yield this.record({ session_id: sid, run, kind: "artifact.written", data: { path: ev.path } }); break;
-          case "result": {
-            const { type: _t, ...rest } = ev;
-            finished = true;
-            yield this.record({ session_id: sid, run, kind: "run.finished", data: rest });
-            break;
+      yield this.record({ session_id: sid, run, kind: "run.started",
+        data: { prompt, ...(run > 0 ? { resumed_from: String(run - 1) } : {}) } });
+      let msg = 0, tool = 0;
+      let finished = false;
+      try {
+        for await (const ev of driver.run({ workspace: s.workspace, prompt, resume: s.harnessSessionId, signal: s.abort.signal })) {
+          switch (ev.type) {
+            case "init": s.harnessSessionId = ev.harness_session_id; break;
+            case "message": yield this.record({ session_id: sid, run, kind: "message", data: { index: msg++, role: ev.role, text: ev.text } }); break;
+            case "tool": yield this.record({ session_id: sid, run, kind: "tool.called", data: { index: tool++, name: ev.name, input: ev.input } }); break;
+            case "tool_denied": yield this.record({ session_id: sid, run, kind: "tool.denied", data: { index: tool++, name: ev.name, input: ev.input, reason: ev.reason } }); break;
+            case "artifact": yield this.record({ session_id: sid, run, kind: "artifact.written", data: { path: ev.path } }); break;
+            case "result": {
+              const { type: _t, ...rest } = ev;
+              finished = true;
+              yield this.record({ session_id: sid, run, kind: "run.finished", data: rest });
+              break;
+            }
           }
         }
+      } catch (err) {
+        if (!finished) {
+          const aborted = s.abort.signal.aborted;
+          yield this.record({ session_id: sid, run, kind: "run.finished",
+            data: { subtype: aborted ? "cancelled" : "error", error: String((err as any)?.message ?? err) } });
+        }
+        throw err;
       }
-    } catch (err) {
-      if (!finished) {
-        const aborted = s.abort.signal.aborted;
-        yield this.record({ session_id: sid, run, kind: "run.finished",
-          data: { subtype: aborted ? "cancelled" : "error", error: String((err as any)?.message ?? err) } });
-      }
-      throw err;
+    } finally {
+      s.active = false;
     }
   }
 
   cancel(sid: string) {
     const s = this.sessions.get(sid);
     if (!s) return;
-    s.abort?.abort();
+    if (s.active) s.abort?.abort();
     this.record({ session_id: sid, kind: "session.cancelled", data: {} });
   }
 
