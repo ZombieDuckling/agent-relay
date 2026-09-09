@@ -7,7 +7,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b packages/core",
+    "typecheck": "tsc -b packages/core packages/drivers/claude",
     "lint": "biome check ."
   },
   "devDependencies": {
