@@ -8,3 +8,5 @@ export type { NodeType, EdgeType, GraphNode, GraphEdge } from "./graph.js";
 export type { DriverEvent, RunOptions, Driver } from "./driver.js";
 export { createWorkspace } from "./workspace.js";
 export { FakeDriver } from "./fake-driver.js";
+export { SessionManager } from "./session-manager.js";
+export type { SessionManagerOptions } from "./session-manager.js";
