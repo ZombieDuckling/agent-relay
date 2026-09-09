@@ -1,0 +1,11 @@
+{
+  "name": "@agent-relay/core",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
+  "scripts": { "build": "tsc -b" },
+  "dependencies": { "better-sqlite3": "^11.0.0", "zod": "^3.23.0" },
+  "devDependencies": { "@types/better-sqlite3": "^7.6.0" }
+}
