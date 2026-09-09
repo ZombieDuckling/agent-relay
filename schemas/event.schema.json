@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RelayEvent",
+  "type": "object",
+  "required": ["id", "ts", "session_id", "kind", "data"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^evt_"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "session.created",
+        "run.started",
+        "message",
+        "tool.called",
+        "tool.denied",
+        "artifact.written",
+        "context.injected",
+        "run.finished",
+        "session.cancelled"
+      ]
+    },
+    "data": {
+      "type": "object"
+    }
+  }
+}
