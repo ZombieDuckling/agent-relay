@@ -10,9 +10,18 @@ import { realpathSync, existsSync } from "node:fs";
 
 const FILE_TOOLS = new Set(["Read", "Write", "Edit", "MultiEdit", "NotebookEdit"]);
 
-// Explicit allowlist of read-only/inert tools that don't touch the filesystem
-// or execute anything, beyond the FILE_TOOLS handled separately above.
-const READ_ONLY_ALLOW = new Set(["Glob", "Grep", "LS", "TodoWrite", "Task"]);
+// Tools that are inert/in-process and never touch the filesystem: allowed
+// unconditionally.
+const READ_ONLY_ALLOW = new Set(["TodoWrite"]);
+
+// Tools that read the filesystem via a `path` argument: path-scoped, same as
+// FILE_TOOLS. When `path` is absent or empty we allow (the harness defaults
+// it to `cwd`, which is the session workspace).
+const PATH_SCOPED_READ_TOOLS = new Set(["Glob", "Grep", "LS"]);
+
+// `Task` spawns a subagent whose own tool calls may not re-enter this
+// `canUseTool` hook, so it cannot be treated as read-only. Denied until that
+// is verified against the SDK.
 
 // Explicitly denied regardless of allowlist status (kept for clarity/documentation;
 // these already fail default-deny since they're not in READ_ONLY_ALLOW).
@@ -106,6 +115,14 @@ export function decideToolUse(
 
   if (READ_ONLY_ALLOW.has(toolName)) {
     return { allow: true };
+  }
+
+  if (PATH_SCOPED_READ_TOOLS.has(toolName)) {
+    const raw = inp.path;
+    if (typeof raw !== "string" || raw.length === 0) {
+      return { allow: true };
+    }
+    return inside(workspace, raw) ? { allow: true } : { allow: false, reason: `path outside workspace: ${raw}` };
   }
 
   return { allow: false, reason: `tool not in relay allowlist: ${toolName}` };

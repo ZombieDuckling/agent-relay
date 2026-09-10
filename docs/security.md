@@ -14,7 +14,9 @@ use the SDK proposes, before it runs. Decisions:
 | Tool | Rule |
 |---|---|
 | `Read`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit` | Allowed only if the target path resolves (via `realpath`, symlink-safe) inside the session workspace. Missing or empty `file_path`/`notebook_path` is denied. A path that does not yet exist is resolved by walking up to the nearest existing ancestor and re-joining the missing segments, so a new file inside the workspace is still allowed and a symlink escape is still caught. |
-| `Glob`, `Grep`, `LS`, `TodoWrite`, `Task` | Allowed unconditionally (read-only or in-process, do not touch the filesystem outside normal tool semantics). |
+| `TodoWrite` | Allowed unconditionally (in-process, never touches the filesystem). |
+| `Glob`, `Grep`, `LS` | Path-scoped like the file tools: allowed only if the `path` argument resolves inside the session workspace. If `path` is absent or empty, allowed (the harness defaults it to `cwd`, which is the workspace). |
+| `Task` | Denied. A subagent spawned via `Task` may not re-enter this `canUseTool` hook for its own tool calls, so it cannot be treated as read-only until that is verified against the SDK. |
 | `WebFetch`, `WebSearch` | Denied always — no network egress path through these tools. |
 | `Bash` | Denied by default. Only runs if the driver is constructed with `allowBash: true`, and even then only if the command text does not match a list of forbidden patterns (see below). |
 | Anything else | Denied by default (`tool not in relay allowlist`). The allowlist is explicit; unrecognized tools do not get a default allow. |

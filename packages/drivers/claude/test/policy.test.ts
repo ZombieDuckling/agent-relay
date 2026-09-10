@@ -43,6 +43,31 @@ describe("decideToolUse", () => {
     expect(decideToolUse(ws, "Glob", { pattern: "**/*.ts" })).toEqual({ allow: true });
   });
 
+  test("denies Grep with path outside workspace", () => {
+    const result = decideToolUse(ws, "Grep", { pattern: ".", path: "/etc", output_mode: "content" });
+    expect(result.allow).toBe(false);
+  });
+
+  test("allows Grep with no path", () => {
+    expect(decideToolUse(ws, "Grep", { pattern: "." })).toEqual({ allow: true });
+  });
+
+  test("allows Glob with path inside workspace", () => {
+    expect(decideToolUse(ws, "Glob", { pattern: "**/*.ts", path: `${ws}/sub` })).toEqual({ allow: true });
+  });
+
+  test("denies LS with path outside workspace", () => {
+    const result = decideToolUse(ws, "LS", { path: "/etc" });
+    expect(result.allow).toBe(false);
+  });
+
+  test("denies Task", () => {
+    expect(decideToolUse(ws, "Task", {})).toEqual({
+      allow: false,
+      reason: "tool not in relay allowlist: Task",
+    });
+  });
+
   test("denies unknown tool by default (default-deny)", () => {
     expect(decideToolUse(ws, "FooTool", {})).toEqual({
       allow: false,
