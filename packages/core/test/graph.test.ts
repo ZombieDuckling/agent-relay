@@ -30,6 +30,14 @@ describe("SessionGraph", () => {
     const b = new SessionGraph(":memory:"); b.rebuild(events); b.rebuild(events);
     expect(b.snapshot()).toEqual(a.snapshot());
   });
+  test("upsertNode merges props: session.cancelled keeps created_at and adds cancelled_at", () => {
+    const g = new SessionGraph(":memory:");
+    g.rebuild(events);
+    g.apply(ev("6", "session.cancelled", {}));
+    const session = g.nodes("Session").find(n => n.id === "session/s1")!;
+    expect(session.props.created_at).toBeDefined();
+    expect(session.props.cancelled_at).toBeDefined();
+  });
   test("neighbors traverses both directions", () => {
     const g = new SessionGraph(":memory:"); g.rebuild(events);
     const ids = g.neighbors("session/s1/run/0").map(n => n.id).sort();

@@ -23,7 +23,9 @@ export class SessionGraph {
   }
 
   private upsertNode(n: GraphNode) {
-    this.db.prepare("INSERT OR REPLACE INTO nodes(id,type,props) VALUES(?,?,?)").run(n.id, n.type, JSON.stringify(n.props));
+    const existing = this.db.prepare("SELECT props FROM nodes WHERE id=?").get(n.id) as { props: string } | undefined;
+    const props = existing ? { ...JSON.parse(existing.props), ...n.props } : n.props;
+    this.db.prepare("INSERT OR REPLACE INTO nodes(id,type,props) VALUES(?,?,?)").run(n.id, n.type, JSON.stringify(props));
   }
   private addEdge(e: GraphEdge) {
     this.db.prepare('INSERT OR IGNORE INTO edges("from","to",type,ts,source_event_id) VALUES(?,?,?,?,?)')
