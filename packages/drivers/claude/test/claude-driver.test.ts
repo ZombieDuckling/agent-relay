@@ -100,3 +100,20 @@ test("a denied Write outside the workspace emits no artifact and exactly one too
   expect(out.filter((e) => e.type === "tool_denied")).toHaveLength(1);
   expect(out.filter((e) => e.type === "tool")).toHaveLength(0);
 });
+
+test("Bash is denied by default and allowed when the driver is constructed with allowBash: true", async () => {
+  const ws = mkdtempSync(join(tmpdir(), "cd-"));
+  const q = fakeQuery([{ tools: [{ name: "Bash", input: { command: "ls -la" } }] }], okResult);
+
+  const denied = new ClaudeDriver({ query: q as any });
+  const deniedOut: any[] = [];
+  for await (const e of denied.run({ workspace: ws, prompt: "p", signal: new AbortController().signal })) deniedOut.push(e);
+  expect(deniedOut.filter((e) => e.type === "tool_denied")).toHaveLength(1);
+  expect(deniedOut.filter((e) => e.type === "tool")).toHaveLength(0);
+
+  const allowed = new ClaudeDriver({ query: q as any, allowBash: true });
+  const allowedOut: any[] = [];
+  for await (const e of allowed.run({ workspace: ws, prompt: "p", signal: new AbortController().signal })) allowedOut.push(e);
+  expect(allowedOut.filter((e) => e.type === "tool_denied")).toHaveLength(0);
+  expect(allowedOut.filter((e) => e.type === "tool")).toHaveLength(1);
+});

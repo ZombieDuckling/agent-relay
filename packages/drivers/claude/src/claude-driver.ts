@@ -12,10 +12,12 @@ export class ClaudeDriver implements Driver {
   readonly name = "claude";
   private q: typeof sdkQuery;
   private model?: string;
+  private allowBash: boolean;
 
-  constructor(deps: { query?: typeof sdkQuery; model?: string } = {}) {
+  constructor(deps: { query?: typeof sdkQuery; model?: string; allowBash?: boolean } = {}) {
     this.q = deps.query ?? sdkQuery;
     this.model = deps.model;
+    this.allowBash = deps.allowBash ?? false;
   }
 
   async *run(o: RunOptions): AsyncIterable<DriverEvent> {
@@ -34,7 +36,7 @@ export class ClaudeDriver implements Driver {
       maxTurns: 25,
       ...(this.model ? { model: this.model } : {}),
       canUseTool: async (toolName, input) => {
-        const d = decideToolUse(o.workspace, toolName, input);
+        const d = decideToolUse(o.workspace, toolName, input, { allowBash: this.allowBash });
         if (d.allow) return { behavior: "allow", updatedInput: input };
         // Correlate the denial with a buffered tool_use block by name+input,
         // since canUseTool is not given the SDK's tool_use id.
