@@ -36,7 +36,7 @@ test("run persists events and projects graph", async () => {
   const s = m.createSession("fake");
   const kinds: string[] = [];
   for await (const e of m.run(s.id, "write hello.txt")) kinds.push(e.kind);
-  expect(kinds).toEqual(["run.started", "message", "tool.called", "artifact.written", "run.finished"]);
+  expect(kinds).toEqual(["run.started", "harness.attached", "message", "tool.called", "artifact.written", "run.finished"]);
   expect(m.graph.nodes("Artifact")[0].id).toBe(`artifact/${s.id}/hello.txt`);
   expect(m.graph.edges("EXECUTED_BY")[0].to).toBe("driver/fake");
 });
@@ -94,6 +94,35 @@ test("cancel during a run records a terminal run.finished with subtype cancelled
   const finished = events.find(e => e.kind === "run.finished");
   expect(finished).toBeDefined();
   expect((finished!.data as any).subtype).toBe("cancelled");
+});
+
+class RecordingResumeDriver implements Driver {
+  readonly name = "recording";
+  resumeSeen: (string | undefined)[] = [];
+  async *run(opts: RunOptions): AsyncIterable<DriverEvent> {
+    this.resumeSeen.push(opts.resume);
+    yield { type: "init", harness_session_id: "harness-abc" };
+    yield { type: "result", subtype: "success", num_turns: 1, duration_ms: 1 };
+  }
+}
+
+test("SessionManager rehydrates sessions from the log across restarts and resumes with the persisted harness session id", async () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "relay-"));
+  const templateDir = join(import.meta.dirname, "../../../workbench-template");
+  const driver1 = new RecordingResumeDriver();
+  const m1 = new SessionManager({ dataDir, templateDir, drivers: { recording: driver1 } });
+  const s = m1.createSession("recording");
+  for await (const _ of m1.run(s.id, "first")) { /* drain */ }
+  expect(driver1.resumeSeen).toEqual([undefined]);
+
+  // Fresh SessionManager on the same dataDir, simulating a restart.
+  const driver2 = new RecordingResumeDriver();
+  const m2 = new SessionManager({ dataDir, templateDir, drivers: { recording: driver2 } });
+  for await (const _ of m2.run(s.id, "second")) { /* drain */ }
+
+  expect(driver2.resumeSeen).toEqual(["harness-abc"]);
+  expect(m2.graph.nodes("Run").map(n => n.id)).toEqual([`session/${s.id}/run/0`, `session/${s.id}/run/1`]);
+  expect(m2.graph.edges("RESUMED_FROM")).toHaveLength(1);
 });
 
 test("driver lookup rejects __proto__ and constructor", () => {

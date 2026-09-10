@@ -19,7 +19,42 @@ export class SessionManager {
     mkdirSync(join(o.dataDir, "workspaces"), { recursive: true });
     this.log = new EventLog(join(o.dataDir, "events.jsonl"));
     this.graph = new SessionGraph(join(o.dataDir, "graph.db"));
-    this.graph.rebuild(this.log.readAll());
+    const events = this.log.readAll();
+    this.graph.rebuild(events);
+    this.rehydrate(events);
+  }
+
+  /**
+   * Reconstruct in-memory session state from the log. `sessions` is not
+   * graph state and the graph rebuild above does not touch it — without
+   * this, a restart loses every session (`run()` throws `unknown session`)
+   * and the harness session id needed for `resume`.
+   */
+  private rehydrate(events: RelayEvent[]): void {
+    for (const e of events) {
+      switch (e.kind) {
+        case "session.created": {
+          const driver = String(e.data.driver ?? "");
+          const workspace = String(e.data.workspace ?? "");
+          this.sessions.set(e.session_id, { driver, workspace, runs: 0, active: false });
+          break;
+        }
+        case "run.started": {
+          const s = this.sessions.get(e.session_id);
+          if (s && typeof e.run === "number") s.runs = Math.max(s.runs, e.run + 1);
+          break;
+        }
+        case "harness.attached": {
+          const s = this.sessions.get(e.session_id);
+          if (s) s.harnessSessionId = String(e.data.harness_session_id ?? "") || undefined;
+          break;
+        }
+        // session.cancelled: no state change needed — a later run may still
+        // resume a cancelled session, so it stays loaded.
+        default:
+          break;
+      }
+    }
   }
 
   private record(e: Omit<RelayEvent, "id" | "ts">): RelayEvent {
@@ -40,7 +75,8 @@ export class SessionManager {
   async *run(sid: string, prompt: string): AsyncIterable<RelayEvent> {
     const s = this.sessions.get(sid);
     if (!s) throw new Error(`unknown session: ${sid}`);
-    const driver = this.o.drivers[s.driver]!;
+    const driver = this.o.drivers[s.driver];
+    if (!driver) throw new Error(`unknown driver: ${s.driver}`);
     const run = s.runs++;
     s.abort = new AbortController();
     s.active = true;
@@ -52,7 +88,10 @@ export class SessionManager {
       try {
         for await (const ev of driver.run({ workspace: s.workspace, prompt, resume: s.harnessSessionId, signal: s.abort.signal })) {
           switch (ev.type) {
-            case "init": s.harnessSessionId = ev.harness_session_id; break;
+            case "init":
+              s.harnessSessionId = ev.harness_session_id;
+              yield this.record({ session_id: sid, run, kind: "harness.attached", data: { harness_session_id: ev.harness_session_id } });
+              break;
             case "message": yield this.record({ session_id: sid, run, kind: "message", data: { index: msg++, role: ev.role, text: ev.text } }); break;
             case "tool": yield this.record({ session_id: sid, run, kind: "tool.called", data: { index: tool++, name: ev.name, input: ev.input } }); break;
             case "tool_denied": yield this.record({ session_id: sid, run, kind: "tool.denied", data: { index: tool++, name: ev.name, input: ev.input, reason: ev.reason } }); break;

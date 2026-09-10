@@ -31,7 +31,8 @@
         "artifact.written",
         "context.injected",
         "run.finished",
-        "session.cancelled"
+        "session.cancelled",
+        "harness.attached"
       ]
     },
     "data": {

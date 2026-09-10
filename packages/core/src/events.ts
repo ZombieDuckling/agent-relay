@@ -3,6 +3,7 @@ import { z } from "zod";
 export const EventKind = z.enum([
   "session.created", "run.started", "message", "tool.called", "tool.denied",
   "artifact.written", "context.injected", "run.finished", "session.cancelled",
+  "harness.attached",
 ]);
 export type EventKind = z.infer<typeof EventKind>;
 
