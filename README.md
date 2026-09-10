@@ -78,7 +78,7 @@ Full design spec:
   realpath-based containment check; default-deny with an explicit tool
   allowlist; Bash denied unless opted in, and gated by a regex heuristic
   even then. See `docs/security.md`.
-- End-to-end (`packages/core/test/e2e-claude.test.ts`, gated on
+- End-to-end (`packages/drivers/claude/test/e2e.test.ts`, gated on
   `CLAUDE_SMOKE=1`): a real Claude Code session, through `SessionManager`,
   writes a file and attempts to read `/etc/hosts`; asserts the `Artifact`
   node exists, the denied read shows up as a `ToolCall` node with
@@ -88,12 +88,12 @@ Full design spec:
 
 - No server, no HTTP/WebSocket API, no pairing/auth, no network exposure —
   all M3.
-- No Codex or Hermes drivers yet — M4.
-- No context-injection endpoint or custom in-process tools yet — M5.
-- No graph export (`graphify`/Cypher) or demo GIF yet — M6.
 - No `sandbox-exec` process confinement — the workspace policy is enforced
   only through `canUseTool`; the harness process itself is not sandboxed.
   See `docs/security.md`.
+- No Codex or Hermes drivers yet — M4.
+- No context-injection endpoint or custom in-process tools yet — M5.
+- No graph export (`graphify`/Cypher) or demo GIF yet — M6.
 - No automated CI security scan (semgrep) has been run against this code
   yet.
 - Only tested on macOS with a single logged-in Claude Code CLI session;

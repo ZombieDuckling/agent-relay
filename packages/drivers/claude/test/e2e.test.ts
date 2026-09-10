@@ -2,13 +2,13 @@ import { mkdtempSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { SessionManager } from "../src/session-manager.js";
-import { ClaudeDriver } from "@agent-relay/driver-claude";
+import { SessionManager } from "@agent-relay/core";
+import { ClaudeDriver } from "../src/claude-driver.js";
 
 test.skipIf(!process.env.CLAUDE_SMOKE)("session → run → artifact node + receipt", async () => {
   const m = new SessionManager({
     dataDir: mkdtempSync(join(tmpdir(), "e2e-")),
-    templateDir: join(import.meta.dirname, "../../../workbench-template"),
+    templateDir: join(import.meta.dirname, "../../../../workbench-template"),
     drivers: { claude: new ClaudeDriver() },
   });
   const s = m.createSession("claude");
